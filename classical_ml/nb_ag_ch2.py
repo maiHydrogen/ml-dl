@@ -10,16 +10,27 @@ assert version.parse(sklearn.__version__) >= version.parse("1.0.1")
 #%%
 import pandas as pd
 #%%
-data_path = '../data/housing.csv'
-data = pd.read_csv(data_path)
-data.describe()  # describe() method shows a quick statistic summary of the data
-data.head()
+import kagglehub
+def load_housing_data():
+    # Download the latest version of a housing dataset from Kaggle
+    path = kagglehub.dataset_download("camnugent/california-housing-prices")
+    print("Path to dataset files:", sys.path)
+    # Load the CSV file into a Pandas DataFrame
+    return pd.read_csv(path + "/housing.csv")
+
+housing = load_housing_data()
+
+# below is code for data on local machine
+# data_path = '../data/housing.csv'
+# housing = pd.read_csv(data_path)
+housing.describe()  # describe() method shows a quick statistic summary of the data
+housing.head()
 #%%
-data.info() # The info() method is useful to get a quick description of the data, in particular the total number of rows, each attribute’s type, and the number of non-null values
-data["ocean_proximity"].value_counts() # find out what categories exist and how many districts belong to each category by using the value_counts() method
+housing.info() # The info() method is useful to get a quick description of the data, in particular the total number of rows, each attribute’s type, and the number of non-null values
+housing["ocean_proximity"].value_counts() # find out what categories exist and how many districts belong to each category by using the value_counts() method
 # %%
 import matplotlib.pyplot as plt
-data.hist(bins = 50, figsize=(24,16)) # call the hist() method on the whole dataset and it will plot a histogram for each numerical attribute
+housing.hist(bins = 50, figsize=(24,16)) # call the hist() method on the whole dataset and it will plot a histogram for each numerical attribute
 plt.show()
 #%%
 # Creating a test set is theoretically simple; pick some instances randomly,
@@ -33,7 +44,7 @@ def shuffle_and_split_data(data, test_ratio):
     train_indices = shuffled_indices[test_set_size:]
     return data.iloc[train_indices], data.iloc[test_indices] 
 
-train_set, test_set = shuffle_and_split_data(data, 0.2) # this function will create different test and train set every single time the program is run
+train_set, test_set = shuffle_and_split_data(housing, 0.2) # this function will create different test and train set every single time the program is run
 len(train_set)
 #%%
 len(test_set)
