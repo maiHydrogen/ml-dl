@@ -3,13 +3,10 @@ print("Welcome to chapter 2 of Ageron's Hands-On Machine Learning with Scikit-Le
 #%%
 import sys
 assert sys.version_info >= (3, 7), "Python version must be >= 3.7"
-# %%
 from packaging import version
 import sklearn
 assert version.parse(sklearn.__version__) >= version.parse("1.0.1")
-#%%
 import pandas as pd
-#%%
 import kagglehub
 def load_housing_data():
     # Download the latest version of a housing dataset from Kaggle
@@ -81,6 +78,7 @@ len(test_set)
  # scikit provides a few fnxs to split datasets into subsets in mulltiple ways. The simplest one is train_test_split(), 
  # which does exactly what its name suggests: it splits the dataset into a training set and a test set, and it even shuffles the data for you. 
  # Here is how to use it:
+import numpy as np
 from sklearn.model_selection import train_test_split
 train_set,test_set = train_test_split(housing, test_size=0.2, random_state=42) 
 # random_state is the seed of the random number generator, so that you get the same split every time you run the code
@@ -121,4 +119,71 @@ strat_test_set["income_cat"].value_counts()/ len(strat_test_set)
 # you might never use the "income_cat" attribute again, so you should drop it to revert data to its original form.
 for set_ in (strat_train_set, strat_test_set):
     set_.drop("income_cat", axis=1, inplace=True)
+# %%
+# if training set is too large, you can use a smaller subset of the training set to speed up experimentation.
+# we have small training set, so we can use the whole training set for experimentation. 
+# therefore, we will create a copy of the training set to avoid any side effects on the original data.
+housing = strat_train_set.copy()
+housing.plot(kind="scatter", x="longitude", y="latitude", grid=True , s=housing["population"] / 100, label="population",
+ c="median_house_value", cmap="jet", colorbar=True, legend=True, sharex=False, figsize=(10, 7))
+#The radius of each circle represents the district’s population (option s), and the color represents the
+#price (option c). Here you use a predefined color map (option cmap) called jet, which ranges from blue (low values) to red (high prices)
+plt.show()
+# %%
+#for calculating the standard coefficient of correlation (Pearson's r) b/w every pair of attributes, use corr() methhod
+corr_matrix= housing.corr(numeric_only=True)
+corr_matrix["median_house_value"].sort_values(ascending=False)
+#The correlation coefficient ranges from –1 to 1. When it is close to 1, it means that there is a strong positive correlation; for example, the median
+#house value tends to go up when the median income goes up. When the coefficient is close to –1, it means that there is a strong negative correlation
+# %%
+# pandas scatter_matrix function plots every numerical attribute against every other numerical attribute.
+from pandas.plotting import scatter_matrix
+attributes = ["median_house_value", "median_income", "total_rooms", "housing_median_age"]
+scatter_matrix(housing[attributes], figsize=(12,8))
+# %%
+#Looking at the correlation scatterplots, it seems like the most promising attribute to predict the median house value is the median income, so you
+#zoom in on their scatterplot
+housing.plot(kind="scatter", x ="median_income",y= "median_house_value", alpha= 0.1,grid =True,)
+plt.show()
+# %%
+# sometimes already existinng attributes are not sufficient for our machine learning purposes,
+# so we add new attributes to fulfuil our purposes. 
+housing["rooms_per_household"] =housing["total_rooms"]/housing["households"]
+housing["bedrooms_ratio"] =housing["total_bedrooms"]/housing["total_rooms"]
+housing["people_per_house"] =housing["population"]/housing["households"]
+
+corr_matrix =housing.corr(numeric_only=True)
+corr_matrix["median_house_value"].sort_values(ascending=False)
+# %%
+# let's It’s time to prepare the data for your machine learning algorithms. Instead of doing this manually, you should write functions for this purpose,
+# for why we need to do this refer the book.
+# first, revert to a clean training set (by copying strat_train_set once again). You should also separate the predictors and the labels, since
+# you don’t necessarily want to apply the same transformations to the predictors and the target values.
+housing =strat_train_set.drop("median_house_value", axis=1) # drop() - drops the label spefcified in another copy of data it never modify the orginal data
+housing_labels = strat_train_set["median_house_value"].copy()
+
+# %%
+# sometimes, some attributes may have missing values there are 3 ways to handle this -
+# housing.dropna(subset = ["total_bedrooms"]) ---> drops the districts that have no total_bedrooms attribute
+# housing.drop("total_bedrooms", axis=1) ---> drops the total_bedrooms attribute from the dataset
+# median = housing["total_bedrooms"].median()
+# housing = housing.fillna(median, inplace=True) ---> fills the missing values with median value of the total_bedrooms attribute
+# the last option is also known as imputation and best of all, scikit-learn provides a handy class to take care of missing values:
+from sklearn.impute import  SimpleImputer
+imputer = SimpleImputer(strategy ="median")
+# Because the imputer calculates statistical averages (like the median), it only works on numerical data.
+housing_num = housing.select_dtypes(include=[np.number]) # drops the non numerical attributes
+# Next, you "train" the imputer on your numerical dataset using the .fit() command
+imputer.fit(housing_num)
+# The imputer calculates the median value for every single column in your dataset and stores those numbers safely away in a variable called imputer.statistics_
+imputer.statistics_
+housing_num.median().values
+# Once it knows the medians, you use the .transform() command to actually fill in all the missing gaps
+X = imputer.transform(housing_num) # output of this will always be an  NumPy array containing neither columns nor rows
+# more powerful imputers are - KNNImputer (replaces missing values with k-nearest neighbour) and IterativeImputer(trains a regressive model to pr3edict the missing values iteratively)
+# refer book for more details on scikit learn design and API
+# we can wrap X in a dataframe easily
+housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
+housing_tr.head()
+
 # %%
