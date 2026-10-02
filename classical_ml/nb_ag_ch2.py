@@ -55,14 +55,20 @@ len(test_set)
 #common solution is to use each instance’s identifier to decide whether or not 
 # it should go in the test set (assuming instances have unique and immutable identifiers)
 # Here is a possible implementation
-from zlib import crc32
-def test_set_check(identifier, test_ratio):
-    return crc32(np.int64 (identifier)) < test_ratio *2*32
+from zlib import crc32 
+# CRC32 (32-bit Cyclic Redundancy Check) is a fast, deterministic checksum algorithm used 
+# to detect accidental data corruption, transmission errors, and bitrot in files, network packets, and storage.
+# Used in databases and software code to rapidly compare if two data strings or records match without comparing the full data payload
+def test_set_check(identifier, test_ratio): # takes the row identifier and converts it into a 64-bit integer
+    return crc32(np.int64 (identifier)) < test_ratio *2**32  
+# it calculates the CRC32 checksum of the integer.
+# an dthen check if the hash  is less than the 20 percent thereshold of all possible hash values 
+# it returns True if the row should be in the test set, and False otherwise.
 def split_train_test_by_id(data, test_ratio, id_column):
     ids = data[id_column]
     in_test_set = ids.apply(lambda id_: test_set_check(id_, test_ratio))
+# The lambda keyword creates a short, one-line anonymous function (a function without a name) that acts as a bridge between pandas and your custom logic.
     return data .loc[~in_test_set], data.loc[in_test_set]
-
 # Unfortunately, the housing dataset does not have an identifier column
 # so we have to create one by converting any column of the data to index such that each district has a unique identifier and 
 # that identifier is stable across dataset updates. for example a district’s latitude and longitude are guaranteed to be stable for a few million years, so you could
@@ -96,7 +102,7 @@ plt.xlabel("Income Category")
 plt.ylabel("Number of Districts")
 plt.title("Districts by Income Category")
 # %%
-# Now that you have created the income category attribute, you can use Scikit-Learn’s StratifiedShuffleSplit class to do a stratified sampling based on this attribute.\
+# Now that you have created the income category attribute, you can use Scikit-Learn’s StratifiedShuffleSplit class to do a stratified sampling based on this attribute.
 # to be precise, the split() method yields the indices of the training set and test set, not the data itself.
 # splitting dataset into 10 stratified splits
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -109,6 +115,7 @@ for train_index, test_index in splitter.split(housing, housing["income_cat"]):
 # now you can use the first split
 strat_test_set, strat_train_split = strat_splits[0]
 
+#### BE CLEAR ABOUT WHY WE ARE USING STRATIFICATION AND RANDOMISATION BOTH READ MORE ABOUT IT
 
 # %%
 # instead of all this we can do the following
@@ -154,8 +161,12 @@ housing["people_per_house"] =housing["population"]/housing["households"]
 
 corr_matrix =housing.corr(numeric_only=True)
 corr_matrix["median_house_value"].sort_values(ascending=False)
+#%% 
+from pandas.plotting import scatter_matrix
+attributes = ["median_house_value", "people_per_house", "bedrooms_ratio", "rooms_per_household"]
+scatter_matrix(housing[attributes], figsize=(12,8))
 # %%
-# let's It’s time to prepare the data for your machine learning algorithms. Instead of doing this manually, you should write functions for this purpose,
+# It’s time to prepare the data for your machine learning algorithms. Instead of doing this manually, you should write functions for this purpose,
 # for why we need to do this refer the book.
 # first, revert to a clean training set (by copying strat_train_set once again). You should also separate the predictors and the labels, since
 # you don’t necessarily want to apply the same transformations to the predictors and the target values.
@@ -173,7 +184,7 @@ from sklearn.impute import  SimpleImputer
 imputer = SimpleImputer(strategy ="median")
 # Because the imputer calculates statistical averages (like the median), it only works on numerical data.
 housing_num = housing.select_dtypes(include=[np.number]) # drops the non numerical attributes
-# Next, you "train" the imputer on your numerical dataset using the .fit() command
+# Next, you "train" the imputer on your numerical dataset using the .fit() command which simply scan all numerical columns andcalculatesthe median for each.
 imputer.fit(housing_num)
 # The imputer calculates the median value for every single column in your dataset and stores those numbers safely away in a variable called imputer.statistics_
 imputer.statistics_
@@ -186,4 +197,44 @@ X = imputer.transform(housing_num) # output of this will always be an  NumPy arr
 housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
 housing_tr.head()
 
+# %%
+# we have dealt with numerical data so far, what if our data contains text attributes? for example, ocean_proximity is a text attribute.
+housing_cat = housing[["ocean_proximity"]]
+housing_cat.head(10)
+# these text are not arbitrary , they are categories, hence ocean_proximity is a categorical attribute.
+# since machine learni9ng algorithms prefer to work with numbers, you need t convert these categories from text  to numbers
+
+# %%
+# for this we can use OrdinalEncoder class  of scikit learn
+from sklearn.preprocessing import OrdinalEncoder
+ordinal_encoder =OrdinalEncoder()
+housing_cat_encoded = ordinal_encoder.fit_transform(housing_cat)
+housing_cat_encoded[:10]  # ---> output is a 2D array containing the encoded values of the first 10 districts
+ordinal_encoder.categories_ # ---> output is a list of 1D arrays containing the categories of each attribute
+
+# %%
+#one-hot encoding is a better approach than ordinal encoding for categorical attributes, because it does not assume any order between the categories.
+from sklearn.preprocessing import OneHotEncoder
+cat_encoder = OneHotEncoder()
+housing_cat_1hot =cat_encoder.fit_transform(housing_cat)
+housing_cat_1hot # ---> output is a sparse matrix containing the one-hot encoded values of the categorical attribute
+housing_cat_1hot.toarray() # ---> output is a dense array containing the one-hot encoded values
+# Alternatively, you can set sparse=False when creating the OneHotEncoder, in which case the transform() method will return a regular (dense) NumPy array directly.
+# list of categories can be obtained as same as ordinal encoder
+cat_encoder.categories_
+# %%
+# you can also use pandas get_dummies() function to perform one-hot encoding
+df_test =pd.DataFrame({"ocean_proximity":["NEAR BAY", "INLAND", "NEAR OCEAN"]})
+pd.get_dummies(df_test)
+#%%
+# Well, the advantage of OneHotEncoder is that it remembers which categories it was trained on. This is very important because once your
+# model is in production, it should be fed exactly the same features as during training: no more, no less.
+# while get_dummies() will happily create new columns for any new categories it encounters, which would break your model.
+df_test_unknown =pd.DataFrame({"ocean_proximity":["<2H OCEAN", "ISLAND"]})
+pd.get_dummies(df_test_unknown)
+#%%
+# OneHotEncoder is smarter: it will detect the unknown category and raise an exception. If you prefer, you can set the handle_unknown
+# hyperparameter to "ignore", in which case it will just represent the unknown category with zeros
+cat_encoder.handle_unknown ="ignore"
+cat_encoder.transform(df_test_unknown).toarray()
 # %%
