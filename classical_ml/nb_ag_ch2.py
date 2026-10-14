@@ -81,9 +81,10 @@ len(train_set)
 # %%
 len(test_set)
 # %%
- # scikit provides a few fnxs to split datasets into subsets in mulltiple ways. The simplest one is train_test_split(), 
- # which does exactly what its name suggests: it splits the dataset into a training set and a test set, and it even shuffles the data for you. 
- # Here is how to use it:
+# scikit provides a few fnxs to split datasets into subsets in mulltiple ways. The simplest one is train_test_split(), 
+# which does exactly what its name suggests: it splits the dataset into a training set and a test set, 
+# and it even shuffles the data for you. 
+# Here is how to use it:
 import numpy as np
 from sklearn.model_selection import train_test_split
 train_set,test_set = train_test_split(housing, test_size=0.2, random_state=42) 
@@ -102,7 +103,8 @@ plt.xlabel("Income Category")
 plt.ylabel("Number of Districts")
 plt.title("Districts by Income Category")
 # %%
-# Now that you have created the income category attribute, you can use Scikit-Learn’s StratifiedShuffleSplit class to do a stratified sampling based on this attribute.
+# Now that you have created the income category attribute, you can use Scikit-Learn’s StratifiedShuffleSplit class 
+# to do a stratified sampling based on this attribute.
 # to be precise, the split() method yields the indices of the training set and test set, not the data itself.
 # splitting dataset into 10 stratified splits
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -202,22 +204,27 @@ housing_tr.head()
 housing_cat = housing[["ocean_proximity"]]
 housing_cat.head(10)
 # these text are not arbitrary , they are categories, hence ocean_proximity is a categorical attribute.
-# since machine learni9ng algorithms prefer to work with numbers, you need t convert these categories from text  to numbers
+# since machine learning algorithms prefer to work with numbers, you need to convert these categories from text  to numbers
 
 # %%
 # for this we can use OrdinalEncoder class  of scikit learn
 from sklearn.preprocessing import OrdinalEncoder
 ordinal_encoder =OrdinalEncoder()
-housing_cat_encoded = ordinal_encoder.fit_transform(housing_cat)
-housing_cat_encoded[:10]  # ---> output is a 2D array containing the encoded values of the first 10 districts
+housing_cat_encoded = ordinal_encoder.fit_transform(housing_cat) #fit_transform(): Performs both fit() and transform() in a single optimized step on training data
+housing_cat_encoded[:10]  # ---> output is a 2D array containing the encoded values of the first 10 districts 
 ordinal_encoder.categories_ # ---> output is a list of 1D arrays containing the categories of each attribute
+# ordinalencoder assumes that two nearby values are more similar than two distant values, which is not true for categorical attributes. 
+# For example, the ocean_proximity attribute has no order between its categories, so it is better to use one-hot encoding instead of ordinal encoding.
+
+#### fit(): Analyzes the dataset and memorizes state. For OneHotEncoder, it notes every unique category present in your training features.
+#### transform() uses those learned parameters to convert data values into numerical matrices that an ML algorithm can process.
 
 # %%
 #one-hot encoding is a better approach than ordinal encoding for categorical attributes, because it does not assume any order between the categories.
 from sklearn.preprocessing import OneHotEncoder
 cat_encoder = OneHotEncoder()
 housing_cat_1hot =cat_encoder.fit_transform(housing_cat)
-housing_cat_1hot # ---> output is a sparse matrix containing the one-hot encoded values of the categorical attribute
+housing_cat_1hot # ---> output is a sparse matrix containing the one-hot encoded values of the categorical attribute and it's position instead of numpy array.
 housing_cat_1hot.toarray() # ---> output is a dense array containing the one-hot encoded values
 # Alternatively, you can set sparse=False when creating the OneHotEncoder, in which case the transform() method will return a regular (dense) NumPy array directly.
 # list of categories can be obtained as same as ordinal encoder
@@ -226,15 +233,79 @@ cat_encoder.categories_
 # you can also use pandas get_dummies() function to perform one-hot encoding
 df_test =pd.DataFrame({"ocean_proximity":["NEAR BAY", "INLAND", "NEAR OCEAN"]})
 pd.get_dummies(df_test)
+# while get_dummies() is simpler to use, and output is a pandas DataFrame but it is harder to use in a ML pipeline
+# and it is mostly used for Quick exploration of the data and visualization.
 #%%
 # Well, the advantage of OneHotEncoder is that it remembers which categories it was trained on. This is very important because once your
 # model is in production, it should be fed exactly the same features as during training: no more, no less.
-# while get_dummies() will happily create new columns for any new categories it encounters, which would break your model.
+# while get_dummies() will happily create new columns for any new categories it encounters or ignores any missing categories, which would break your model.
 df_test_unknown =pd.DataFrame({"ocean_proximity":["<2H OCEAN", "ISLAND"]})
 pd.get_dummies(df_test_unknown)
+# this is why get_dummies() is not suitable for production use.
 #%%
 # OneHotEncoder is smarter: it will detect the unknown category and raise an exception. If you prefer, you can set the handle_unknown
 # hyperparameter to "ignore", in which case it will just represent the unknown category with zeros
 cat_encoder.handle_unknown ="ignore"
 cat_encoder.transform(df_test_unknown).toarray()
+# whenever you have a new category, it will be represented as a row of zeros, which is a reasonable approach.
+# when the datasets have a large number of categories, the one hot encoding might create a very large number of features, 
+# which can be problematic for some machine learning algorithms. In this case, 
+# you can use the hashing trick to map categories to integers and then use one-hot encoding on those integers. 
+# This is implemented in scikit-learn’s FeatureHasher class.
+# When dealing with neural networks, you can replace each category with a low-dimensional vector learned during training, which is called an embedding.
+# %%
+cat_encoder.feature_names_in_
+# When you fit any Scikit-Learn estimator using a DataFrame, the estimator stores the column names in the feature_names_in_ attribute
+# Transformers also provide a get_feature_names_out() method that you can use to build a DataFrame around the transformer’s output:
+cat_encoder.get_feature_names_out()
+# %%
+# to improve the bias in algorithms, we can add feature scaling to the data preprocessing pipeline.
+# Feature scaling is a technique to standardize the independent features present in the data in a fixed range.
+# There are two common ways to do this:
+# 1. Min-max scaling (Normalization):  for each attribute, the values are shifted and rescaled so that they end up
+# ranging from 0 to 1. This is performed by subtracting the min value and dividing by the difference between the min and the max.
+# 2. Standardization: for each attribute, the values are shifted and rescaled so that they end up having a mean of 0 and a standard deviation of 1. 
+# This is performed by subtracting the mean value and dividing by the standard deviation.
+from sklearn.preprocessing import MinMaxScaler
+min_max_scaler =MinMaxScaler(feature_range=(0,1)) #can be set to -1 to 1
+housing_num_min_max_scaled = min_max_scaler.fit_transform(housing_num)
+# %%
+from sklearn.preprocessing import StandardScaler
+std_scaler = StandardScaler()
+housing_num_std_scaled = std_scaler.fit_transform(housing_num)
+
+# %%
+# When a feature's distribution has a heavy tail, 
+# both minmaxing and standardization will squash most values into a small range. 
+# ML models don't like them at all because they will be dominated by the few extreme values.
+# so before scaling we have to transform the data to make it more symmetrically distributed.
+# Another approach to handle heavy-tailed features consists in bucketizing the feature. 
+# This means chopping its distribution into roughly equal-sizedbuckets, and replacing 
+# each feature value with the index of the bucket it belongs to.
+# When a feature has a multimodal distribuition, it is often a good idea to bucketize it and this time
+# bucket IDs can be treated as categories rather than as numbers, so you can use one-hot encoding on them.
+# This approach will allow the regression model to more easily learn different rules for different ranges of this feature value.
+# Another approach to transforming multimodal distributions is to add a feature for each of the modes (at least the main ones),
+# The similarity measure is typically computed using a radial basis function(RBF)—
+# any function that depends only on the distance between the input value and a fixed point. The most commonly used RBF is the Gaussian RBF
+from sklearn.metrics.pairwise import rbf_kernel
+age_simil_35 = rbf_kernel(housing[["housing_median_age"]], [[35]], gamma=0.1)
+# %%
+# in this example we just train the model on a single raw input feature (median income), for simplicity
+from sklearn.linear_model import LinearRegression
+target_scaler = StandardScaler()
+scaled_labels = target_scaler.fit_transform(housing_labels.to_frame())
+
+model = LinearRegression()
+model.fit(housing[["median_income"]], scaled_labels)
+some_new_data = housing[["median_income"]].iloc[:5]
+
+scaled_predictions = model.predict(some_new_data)
+predictions = target_scaler.inverse_transform(scaled_predictions)
+
+# %%
+# let's create a custom log-transformer and apply it to the population feature:
+from sklearn.preprocessing import FunctionTransformer
+log_transformer = FunctionTransformer(np.log, inverse_func = np.exp)
+log_pop = log_transformer.fit_transform(housing[["population"]])
 # %%
