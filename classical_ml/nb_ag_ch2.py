@@ -304,8 +304,51 @@ scaled_predictions = model.predict(some_new_data)
 predictions = target_scaler.inverse_transform(scaled_predictions)
 
 # %%
+# Sometimes you need to alter your data using a straightforward mathematical calculation (like taking the logarithm of a number). 
+# Because this is just a direct calculation, it doesn't require the machine learning model to "train" or learn patterns from the data first.
 # let's create a custom log-transformer and apply it to the population feature:
 from sklearn.preprocessing import FunctionTransformer
 log_transformer = FunctionTransformer(np.log, inverse_func = np.exp)
 log_pop = log_transformer.fit_transform(housing[["population"]])
+# %%
+# here’s a custom transformer that acts much like the StandardScaler:
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_array, check_is_fitted
+class StandardScalerClone(BaseEstimator, TransformerMixin):
+ def __init__(self, with_mean=True): # no *args or **kwargs!
+    self.with_mean = with_mean
+ def fit(self, X, y=None): # y is required even though we don't use it
+    X = check_array(X) # checks that X is an array with finite float values
+    self.mean_ = X.mean(axis=0)
+    self.scale_ = X.std(axis=0)
+    self.n_features_in_ = X.shape[1] # every estimator stores this in fit()
+    return self # always return self!
+ def transform(self, X):
+    check_is_fitted(self) # looks for learned attributes (with trailing _)
+    X = check_array(X)
+    assert self.n_features_in_ == X.shape[1]
+    if self.with_mean:
+        X = X - self.mean_
+    return X / self.scale_
+# %%
+# A custom transformer can (and often does) use other estimators in its implementation. 
+# For example, the following code demonstrates custom transformer that uses a KMeans clusterer in the fit() method 
+# to identify the main clusters in the training data, and then uses rbf_kernel() in the transform() method 
+# to measure how similar each sample is to each cluster center:
+from sklearn.cluster import KMeans
+class ClusterSimilarity(BaseEstimator, TransformerMixin):
+ def __init__(self, n_clusters=10, gamma=1.0,random_state=None):
+    self.n_clusters = n_clusters
+    self.gamma = gamma
+    self.random_state = random_state
+ def fit(self, X, y=None, sample_weight=None):
+    self.kmeans_ = KMeans(self.n_clusters,random_state=self.random_state)
+    self.kmeans_.fit(X, sample_weight=sample_weight)
+    return self # always return self!
+ def transform(self, X):
+    return rbf_kernel(X, self.kmeans_.cluster_centers_,gamma=self.gamma)
+ def get_feature_names_out(self, names=None):
+    return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
+
+
 # %%
